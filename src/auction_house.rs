@@ -48,14 +48,14 @@ impl AuctionHouse {
     pub async fn collect_auctions<Fut: Future<Output = ()>>(
         &self,
         chunk_size: usize,
-        f: impl FnMut(Vec<Response>) -> Fut,
+        f: impl FnMut(Vec<AuctionPage>) -> Fut,
     ) {
         let client = reqwest::Client::new();
         let token_ids = (0..self.total_pages).into_iter();
         stream::iter(token_ids)
             .map(|page_nb| {
                 let client = client.clone();
-                async move { self.get_page_response(&client, page_nb).await }
+                async move { self.get_page(&client, page_nb).await }
                 // TODO: (maybe) HANDLE ERROR
             })
             .buffer_unordered(MAX_CONCURRENT_REQUESTS)
@@ -65,27 +65,27 @@ impl AuctionHouse {
             .await;
     }
 
-    pub async fn get_page_response(
+    pub async fn get_page(
         &self,
         client: &reqwest::Client,
         page_nb: i64,
-    ) -> Result<Response, reqwest::Error> {
-        Self::get_page_response_from_url(client, page_nb, &self.base_url).await
+    ) -> Result<AuctionPage, reqwest::Error> {
+        Self::get_page_from_url(client, page_nb, &self.base_url).await
     }
 
-    pub async fn get_page_response_from_url(
+    pub async fn get_page_from_url(
         client: &reqwest::Client,
         page_nb: i64,
         api_url: &str,
-    ) -> Result<Response, reqwest::Error> {
+    ) -> Result<AuctionPage, reqwest::Error> {
         let url = format!("{}{}", api_url, page_nb);
         let retry_strategy = ExponentialBackoff::from_millis(100).take(MAX_FAILS);
         Retry::spawn(retry_strategy, || async {
             let resp = client.get(&url).send().await?;
             dbg!(resp.status());
-            // let page = resp.json::<AuctionPage>().await.unwrap();
-            // println!("len {}", page.auctions.len());
-            return Ok(resp);
+            let page = resp.json::<AuctionPage>().await.unwrap();
+            println!("len {}", page.auctions.len());
+            return Ok(page);
         })
             .await
     }

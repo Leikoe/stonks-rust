@@ -7,21 +7,11 @@ mod utils;
 async fn main() {
     println!("Starting stonks ...");
 
-    let auction_house = AuctionHouse::new(60);
+    let auction_house = AuctionHouse::new(6);
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel(60);
-
-    let handle = tokio::task::spawn(|| async move {
-        while let Some(page_resp) = rx.recv().await {
-            dbg!(page_resp)
-        }
-    });
-
-    auction_house.collect_auctions(2, |pages| async move {
-        for page_response in pages {
-            tx.send(page_response).await;
+    auction_house.collect_auctions(10, |pages| async move {
+        for page in pages {
+            dbg!(page.page);
         }
     }).await;
-
-    handle.await;
 }
