@@ -7,11 +7,9 @@ mod utils;
 async fn main() {
     println!("Starting stonks ...");
 
-    let auction_house = AuctionHouse::new(6);
+    let auction_house = AuctionHouse::new(60);
 
-    auction_house.collect_auctions(10, |pages| async move {
-        for page in pages {
-            dbg!(page.page);
-        }
+    auction_house.collect_auctions(|page| async move {
+        dbg!(page.page);
     }).await;
 }

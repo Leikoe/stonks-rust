@@ -44,23 +44,24 @@ impl AuctionHouse {
             total_pages
         }
     }
-    
+
     pub async fn collect_auctions<Fut: Future<Output = ()>>(
         &self,
-        chunk_size: usize,
-        f: impl FnMut(Vec<AuctionPage>) -> Fut,
+        f: impl FnMut(AuctionPage) -> Fut,
     ) {
         let client = reqwest::Client::new();
         let token_ids = (0..self.total_pages).into_iter();
         stream::iter(token_ids)
             .map(|page_nb| {
                 let client = client.clone();
-                async move { self.get_page(&client, page_nb).await }
+                let url = self.base_url.clone();
+                tokio::spawn(async move {
+                    Self::get_page_from_url(&client, page_nb, &url).await.unwrap()
+                })
                 // TODO: (maybe) HANDLE ERROR
             })
             .buffer_unordered(MAX_CONCURRENT_REQUESTS)
             .filter_map(|res| async { res.ok() })
-            .chunks(chunk_size)
             .for_each(f)
             .await;
     }
@@ -83,9 +84,7 @@ impl AuctionHouse {
         Retry::spawn(retry_strategy, || async {
             let resp = client.get(&url).send().await?;
             dbg!(resp.status());
-            let page = resp.json::<AuctionPage>().await.unwrap();
-            println!("len {}", page.auctions.len());
-            return Ok(page);
+            resp.json::<AuctionPage>().await
         })
             .await
     }
